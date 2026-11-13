@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QR тест жүйесі</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--text:#1d2433;--muted:#667085;--accent:#2f5bea;--bad:#d92d20;--good:#12805c;--line:#e3e6ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151c;--card:#1b2030;--text:#eef1f8;--muted:#9aa4b8;--accent:#7b9bff;--bad:#ff6b5e;--good:#45c79a;--line:#2a3147;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12151c;--card:#1b2030;--text:#eef1f8;--muted:#9aa4b8;--accent:#7b9bff;--bad:#ff6b5e;--good:#45c79a;--line:#2a3147;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.wrap{max-width:520px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+h1{font-size:1.5rem;margin:0 0 8px}
+p{margin:8px 0;color:var(--muted)}
+label{display:block;margin-top:12px;color:var(--muted);font-size:.9rem}
+button,input,textarea{font:inherit}
+button{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:14px 18px;width:100%;margin-top:14px;cursor:pointer;font-weight:600}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+input,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-top:6px}
+textarea{font-size:.85rem;font-family:ui-monospace,Menlo,Consolas,monospace}
+.warn{background:rgba(217,45,32,.12);color:var(--bad);border-radius:12px;padding:12px;margin-bottom:14px;font-weight:600}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:10px 0 16px}
+.bar i{display:block;height:100%;width:100%;background:var(--accent)}
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:1.1rem}
+.tmr{font-weight:700;font-size:1.6rem;color:var(--text)}
+.tmr.bad{color:var(--bad)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.ab{margin:0;padding:34px 0;font-size:2.2rem;background:var(--bg);color:var(--text);border:2px solid var(--line)}
+.ab.sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ab:disabled{opacity:.6}
+.big{font-size:2.8rem;font-weight:700;color:var(--good)}
+.qt{font-size:clamp(1.6rem,3.6vw,2.8rem);line-height:1.25;margin:10px 0 22px}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.opt{display:flex;gap:14px;align-items:center;border:2px solid var(--line);border-radius:14px;padding:18px;font-size:clamp(1.1rem,2.3vw,1.9rem)}
+.opt.ok{border-color:var(--good);background:rgba(18,128,92,.12)}
+.bd{flex:none;width:2.2em;height:2.2em;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+#qr{display:flex;justify-content:center;margin:20px 0}
+#qr>div{background:#fff;padding:14px;border-radius:12px;display:inline-block}
+.names{color:var(--text);line-height:1.8}
+table{width:100%;border-collapse:collapse;font-size:clamp(1rem,2vw,1.5rem);margin-top:12px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);color:var(--text)}
+th{color:var(--muted);font-weight:500}
+@media (max-width:700px){.opts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+var DB='https://qr-test-35423-default-rtdb.europe-west1.firebasedatabase.app';
+var app=document.getElementById('app'),wrap=document.querySelector('.wrap'),L='ABCD',TS={'.sv':'timestamp'};
+var SAMPLE="Қазақстанның астанасы қай қала?\nA) Алматы\nB) Астана\nC) Шымкент\nD) Қарағанды\nB\n\n2 + 2 × 3 = ?\nA) 8\nB) 10\nC) 12\nD) 6\nA\n\nСудың химиялық формуласы қандай?\nA) CO2\nB) O2\nC) H2O\nD) NaCl\nC";
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function lg(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function ls(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function api(m,path,body){return fetch(DB+'/s/'+path+'.json',{method:m,body:body===undefined?undefined:JSON.stringify(body)}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
+function rid(){return Math.random().toString(36).slice(2,8)}
+function r1(x){return Math.round(x*10)/10}
+function parseQ(txt){
+ var out=[];
+ txt.replace(/\r/g,'').split(/\n\s*\n/).forEach(function(b){
+  var ln=b.split('\n').map(function(x){return x.trim()}).filter(Boolean);
+  if(ln.length<6)return;
+  var a=ln[5].toUpperCase().replace(/[^A-D1-4]/g,'').slice(-1),ai='ABCD'.indexOf(a);
+  if(ai<0&&/[1-4]/.test(a))ai=+a-1;
+  if(ai<0)return;
+  out.push({q:ln[0],o:ln.slice(1,5).map(function(x){return x.replace(/^[A-Da-d][\)\.]\s*/,'')}),a:ai});
+ });
+ return out;
+}
+var P=/^#s([a-z0-9]{4,10})$/.exec(location.hash);
+if(P)student(P[1]);else teacher();
+
+function teacher(){
+ var sid,qs,secs,N,M,qi=0,players={},allA={},T={},timer,busy=false,ansN=0,fin=[];
+ setup();
+ function setup(){
+  wrap.style.maxWidth='760px';
+  app.innerHTML='<div class="card"><h1>📋 Тест дайындау</h1><p>Әр сұрақты бос жолмен бөліңіз: 1-жол — сұрақ, келесі 4 жол — A, B, C, D нұсқалары, соңғы жол — дұрыс жауап әрпі.</p><textarea id="ta" rows="14"></textarea><p id="cnt"></p><label>Әр сұраққа уақыт (секунд)<input id="sec" type="number" value="30" min="5"></label><label>Бет сілтемесі (студенттер ашатын)<input id="lnk"></label><button id="go">Бастау</button></div>';
+  var ta=document.getElementById('ta'),cnt=document.getElementById('cnt');
+  ta.value=lg('qtext')||SAMPLE;
+  document.getElementById('lnk').value=location.href.split('#')[0];
+  function upd(){ls('qtext',ta.value);cnt.textContent='Танылған сұрақ саны: '+parseQ(ta.value).length}
+  ta.oninput=upd;upd();
+  document.getElementById('go').onclick=function(){
+   qs=parseQ(ta.value);
+   if(!qs.length){cnt.textContent='Сұрақтар танылмады, форматты тексеріңіз.';return}
+   secs=+document.getElementById('sec').value||30;N=qs.length;M=100/N;
+   var base=document.getElementById('lnk').value.trim().split('#')[0];
+   sid=rid();players={};allA={};T={};
+   api('PUT',sid,{cfg:{n:N,secs:secs},st:{phase:'lobby'}}).then(function(){lobby(base)}).catch(function(){cnt.textContent='Дерекқорға қосылу мүмкін болмады. Интернетті және Firebase test mode-ты тексеріңіз.'});
+  };
+ }
+ function lobby(base){
+  wrap.style.maxWidth='1100px';
+  app.innerHTML='<div class="card" style="text-align:center"><h1>Телефонмен QR кодты сканерлеңіз</h1><div id="qr"></div><p>Қосылғандар: <b id="cn" style="color:var(--text)">0</b></p><div id="nl" class="names"></div><button id="st">Тестті бастау</button></div>';
+  var box=document.getElementById('qr');
+  try{new QRCode(box,{text:base+'#s'+sid,width:300,height:300,correctLevel:QRCode.CorrectLevel.M})}catch(e){box.textContent='QR құру мүмкін болмады'}
+  timer=setInterval(function(){api('GET',sid+'/p').then(function(p){players=p||{};var n=names();document.getElementById('cn').textContent=n.length;document.getElementById('nl').textContent=n.join(' · ')}).catch(function(){})},1000);
+  document.getElementById('st').onclick=function(){clearInterval(timer);ask(0)};
+ }
+ function names(){return Object.keys(players).map(function(i){return players[i].n}).filter(Boolean)}
+ function ask(i){
+  qi=i;busy=false;ansN=0;
+  api('PUT',sid+'/st',{phase:'q',i:i,t:TS}).then(function(){return api('GET',sid+'/st/t')}).then(function(t){T[i]=t;showQ()}).catch(function(){alert('Байланыс қатесі, қайта басыңыз')});
+ }
+ function showQ(){
+  var q=qs[qi];
+  app.innerHTML='<div class="card"><div class="meta"><span>Сұрақ '+(qi+1)+' / '+N+' · жауап берді: <b id="an">0</b></span><span class="tmr" id="tm"></span></div><div class="bar"><i id="pb"></i></div><h1 class="qt">'+esc(q.q)+'</h1><div class="opts">'+q.o.map(function(t,i){return'<div class="opt"><span class="bd">'+L[i]+'</span><span>'+esc(t)+'</span></div>'}).join('')+'</div><button class="ghost" id="skip">Рейтингке өту</button></div>';
+  document.getElementById('skip').onclick=rank;
+  var t0=Date.now(),k=0;
+  timer=setInterval(function(){
+   var rest=secs*1000-(Date.now()-t0),left=Math.max(0,Math.ceil(rest/1000));
+   var tm=document.getElementById('tm');if(!tm)return;
+   tm.textContent=left+' с';tm.className=left<=5?'tmr bad':'tmr';
+   document.getElementById('pb').style.width=Math.max(0,rest/(secs*1000)*100)+'%';
+   if(++k%2===0)Promise.all([api('GET',sid+'/a/'+qi),api('GET',sid+'/p')]).then(function(r){players=r[1]||{};ansN=Object.keys(r[0]||{}).length;var el=document.getElementById('an');if(el)el.textContent=ansN}).catch(function(){});
+   if(rest<=0||(ansN>0&&ansN>=names().length))rank();
+  },500);
+ }
+ function pt(i,id){
+  var x=(allA[i]||{})[id],pl=players[id];
+  if(!x||!pl||x.c!==qs[i].a||x.ts<(pl.rs||0))return 0;
+  var el=x.ts-T[i];if(el>secs*1000+2000)return 0;
+  return M*(0.9+0.1*Math.max(0,1-el/(secs*1000)));
+ }
+ function rank(){
+  if(busy)return;busy=true;clearInterval(timer);
+  Promise.all([api('GET',sid+'/a/'+qi),api('GET',sid+'/p')]).then(function(r){
+   allA[qi]=r[0]||{};players=r[1]||{};
+   var rows=Object.keys(players).filter(function(id){return players[id].n}).map(function(id){
+    var tt=0,cc=0,ps=[];for(var i=0;i<=qi;i++){var pp=pt(i,id);tt+=pp;ps.push(pp);if(pp>0)cc++}
+    var x=allA[qi][id];
+    return{id:id,n:players[id].n,c:cc,ps:ps,x:players[id].x||0,d:pt(qi,id),t:tt,s:(x&&x.ts>=(players[id].rs||0))?(x.ts-T[qi])/1000:null};
+   });
+   rows.sort(function(a,b){return b.t-a.t||b.d-a.d});fin=rows;
+   var sc={};rows.forEach(function(r,k){sc[r.id]={t:r1(r.t),d:r1(r.d),r:k+1}});
+   var last=qi===N-1,q=qs[qi];
+   api('PUT',sid+'/sc',sc).then(function(){return api('PUT',sid+'/st',{phase:'rank',i:qi,k:q.a})}).catch(function(){});
+   wrap.style.maxWidth='1100px';
+   app.innerHTML='<div class="card"><p>Сұрақ '+(qi+1)+' / '+N+'</p><div class="opts"><div class="opt ok"><span class="bd">'+L[q.a]+'</span><span>'+esc(q.o[q.a])+'</span></div></div><h1 style="margin-top:18px">'+(last?'Қорытынды рейтинг':'Рейтинг')+'</h1><table><tr><th>#</th><th>Аты</th><th>Осы сұрақ</th><th>Уақыты</th><th>Жалпы / 100</th></tr>'+rows.slice(0,10).map(function(r,k){return'<tr><td>'+(k+1)+'</td><td>'+esc(r.n)+'</td><td>+'+r1(r.d)+'</td><td>'+(r.s===null?'—':r.s.toFixed(1)+' с')+'</td><td><b>'+r1(r.t)+'</b></td></tr>'}).join('')+'</table><button id="nx">'+(last?'Аяқтау':'Келесі сұрақ')+'</button></div>';
+   document.getElementById('nx').onclick=function(){if(last)finish();else ask(qi+1)};
+  }).catch(function(){busy=false;alert('Байланыс қатесі, «Рейтингке өту» батырмасын қайта басыңыз')});
+ }
+ function finish(){
+  api('PUT',sid+'/st',{phase:'end'}).catch(function(){});
+  api('GET',sid+'/p').then(function(p){fin.forEach(function(r){if(p&&p[r.id])r.x=p[r.id].x||0})}).catch(function(){}).then(showFinal);
+ }
+ function showFinal(){
+  var med=['🥇','🥈','🥉'];
+  app.innerHTML='<div class="card"><h1>Жалпы нәтиже</h1><p>Қатысушылар: '+fin.length+'. Студенттер өз нәтижесін телефоннан да көре алады.</p><table><tr><th>#</th><th>Аты</th><th>Дұрыс жауап</th><th>Сұрақтар бойынша</th><th>Шығу саны</th><th>Жалпы / 100</th></tr>'+fin.map(function(r,k){return'<tr><td>'+(med[k]||(k+1))+'</td><td>'+esc(r.n)+'</td><td>'+r.c+' / '+N+'</td><td style="font-size:.8em;letter-spacing:2px;word-break:break-all">'+r.ps.map(function(x){return x>0?'✓':'✗'}).join('')+'</td><td>'+r.x+'</td><td><b>'+r1(r.t)+'</b></td></tr>'}).join('')+'</table><button id="csv">Нәтижені жүктеп алу (Excel)</button><button class="ghost" id="nt">Жаңа тест</button></div>';
+  document.getElementById('csv').onclick=function(){
+   function c(x){return String(r1(x)).replace('.',',')}
+   var h=['Аты'];for(var i=1;i<=N;i++)h.push('Сұрақ '+i);h.push('Дұрыс жауап','Шығу саны','Жалпы / 100');
+   var rows=[h.join(';')].concat(fin.map(function(r){return[r.n.replace(/;/g,',')].concat(r.ps.map(c),[r.c,r.x,c(r.t)]).join(';')}));
+   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='natije.csv';a.click();
+  };
+  document.getElementById('nt').onclick=function(){api('DELETE',sid).catch(function(){});setup()};
+ }
+}
+
+function student(sid){
+ var pid=lg('pid')||rid()+rid();ls('pid',pid);
+ var name='',last=ls_name(),warn='',cur=null,lst=null,cfg=null,sel=-1,qStart=0,att=+lg('att'+sid)||0;
+ function ls_name(){return lg('pname')||''}
+ wrap.style.maxWidth='520px';
+ api('GET',sid+'/cfg').then(function(c){cfg=c;if(!c)app.innerHTML='<div class="card"><h1>Тест табылмады</h1><p>QR кодты қайта сканерлеңіз.</p></div>';else{poll();setInterval(poll,1000);setInterval(tick,250)}}).catch(function(){app.innerHTML='<div class="card"><h1>Байланыс жоқ</h1><p>Интернетті тексеріп, бетті жаңартыңыз.</p></div>'});
+ function poll(){api('GET',sid+'/st').then(function(s){lst=s;render()}).catch(function(){})}
+ function render(){
+  if(!lst)return;
+  var ph=!name?'name':lst.phase==='q'?'q'+lst.i:lst.phase==='rank'?'r'+lst.i:lst.phase;
+  if(ph===cur)return;
+  cur=ph;draw(ph);
+ }
+ function draw(ph){
+  if(ph==='name'){
+   app.innerHTML='<div class="card">'+(warn?'<div class="warn">'+esc(warn)+'</div>':'')+'<h1>Тестке кіру</h1><p>Сұрақтар үлкен экранда көрінеді. Телефонда тек жауап нұсқасын (A, B, C, D) таңдайсыз. Әр сұраққа '+cfg.secs+' секунд беріледі. Жауап дұрыс және жылдам болса, ұпай көп. Басқа бағдарламаға өтсеңіз, бұл тіркеліп, нәтижеде көрсетіледі.</p><input id="nm" placeholder="Аты-жөніңіз"><button id="go">Дайын</button></div>';
+   var nm=document.getElementById('nm');nm.value=last;
+   document.getElementById('go').onclick=function(){
+    var v=nm.value.trim();if(!v){nm.focus();return}
+    api('GET',sid+'/p/'+pid).then(function(o){return o?api('PATCH',sid+'/p/'+pid,{n:v,x:att}):api('PUT',sid+'/p/'+pid,{n:v,rs:TS,x:att})}).then(function(){name=v;last=v;ls('pname',v);warn='';cur=null;render()}).catch(function(){nm.placeholder='Байланыс қатесі, қайталаңыз'});
+   };
+  }else if(ph==='lobby'){
+   app.innerHTML='<div class="card" style="text-align:center"><h1>'+esc(name)+', күтіңіз</h1><p>Оқытушы тестті бастайды.</p></div>';
+  }else if(ph[0]==='q'){
+   sel=-1;qStart=Date.now();var i=lst.i;
+   app.innerHTML='<div class="card"><div class="meta"><span>Сұрақ '+(i+1)+' / '+cfg.n+'</span><span class="tmr" id="tm"></span></div><div class="bar"><i id="pb"></i></div><p id="hint">Сұрақты үлкен экраннан қараңыз</p><div class="grid">'+L.split('').map(function(c,k){return'<button class="ab" data-k="'+k+'">'+c+'</button>'}).join('')+'</div></div>';
+   var bs=app.querySelectorAll('.ab');
+   Array.prototype.forEach.call(bs,function(b){b.onclick=function(){
+    if(sel>=0)return;sel=+b.dataset.k;
+    Array.prototype.forEach.call(bs,function(x){x.classList.toggle('sel',x===b);x.disabled=true});
+    document.getElementById('hint').textContent='Жауап қабылданды';
+    api('PUT',sid+'/a/'+i+'/'+pid,{c:sel,ts:TS}).catch(function(){document.getElementById('hint').textContent='Жіберу қатесі'});
+   }});
+  }else if(ph[0]==='r'||ph==='end'){
+   var end=ph==='end',ok=lst.k,mine=sel;
+   app.innerHTML='<div class="card" style="text-align:center"><h1>'+(end?'Тест аяқталды':'Дұрыс жауап: '+L[ok])+'</h1><p id="res">Жүктелуде...</p></div>';
+   api('GET',sid+'/sc/'+pid).then(function(s){
+    var el=document.getElementById('res');if(!el)return;s=s||{t:0,d:0,r:'-'};
+    if(end)el.innerHTML='<b style="color:var(--text);font-size:1.2rem">'+esc(name)+'</b><br><span class="big">'+s.t+' / 100</span><br>Орныңыз: '+s.r+'<br>Тесттен шығу саны: '+att+'<br>Қазір: <b id="clk" style="color:var(--text)"></b><br>Бұл экранды оқытушыға көрсетіңіз.';
+    else el.innerHTML=(mine===ok?'Жарайсыз! ':'Бұл жолы болмады. ')+'<br><span class="big">+'+s.d+'</span><br>Жалпы: '+s.t+' / 100<br>Орныңыз: '+s.r;
+   }).catch(function(){});
+  }
+ }
+ function tick(){
+  var tm=document.getElementById('tm');
+  if(tm&&lst&&lst.phase==='q'){
+   var rest=cfg.secs*1000-(Date.now()-qStart),left=Math.max(0,Math.ceil(rest/1000));
+   tm.textContent=left+' с';tm.className=left<=5?'tmr bad':'tmr';
+   document.getElementById('pb').style.width=Math.max(0,rest/(cfg.secs*1000)*100)+'%';
+  }
+  var ck=document.getElementById('clk');if(ck)ck.textContent=new Date().toLocaleTimeString('kk-KZ');
+ }
+ var away=false;
+ function leave(){
+  if(away||!name||!lst||lst.phase==='lobby'||lst.phase==='end')return;
+  away=true;att++;ls('att'+sid,att);
+  api('PATCH',sid+'/p/'+pid,{x:att}).catch(function(){});
+ }
+ function back(){if(!document.hidden)away=false}
+ window.addEventListener('focus',back);
+ document.addEventListener('visibilitychange',function(){if(document.hidden)leave();else back()});
+ window.addEventListener('blur',leave);
+ window.addEventListener('pagehide',leave);
+}
+window.addEventListener('hashchange',function(){location.reload()});
+})();
+</script>
+</body>
+</html>
